@@ -40,7 +40,7 @@ class VendorPayoutService {
    */
   async getVendorPaymentPreferences(vendorId) {
     try {
-      const preferences = await VendorPaymentPreferences.findOne({ vendorId });
+      const preferences = await VendorPaymentPreferences.findOne({ vendorId: { $eq: String(vendorId) } });
       return preferences || {
         mobileMoney: { enabled: false },
         bankAccount: { enabled: false },
@@ -135,7 +135,7 @@ class VendorPayoutService {
     try {
       console.log(`Recording payout for vendor ${vendorId}`, { payoutRecord });
       await VendorPaymentPreferences.findOneAndUpdate(
-        { vendorId },
+        { vendorId: { $eq: String(vendorId) } },
         { 
           $push: { 
             payoutHistory: {
@@ -443,7 +443,7 @@ class VendorPayoutService {
         query['payoutHistory.status'] = status;
       }
       
-      const preferences = await VendorPaymentPreferences.findOne(query);
+      const preferences = await VendorPaymentPreferences.findOne({ ...query, vendorId: { $eq: String(vendorId) } });
       
       if (!preferences || !preferences.payoutHistory) {
         console.log(`No payout history found for vendor ${vendorId}`);

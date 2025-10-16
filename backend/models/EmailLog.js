@@ -1,3 +1,4 @@
+
 const mongoose = require('mongoose');
 
 const emailLogSchema = new mongoose.Schema({
@@ -145,7 +146,7 @@ emailLogSchema.statics.updateStatus = async function(messageId, status, addition
     }
     
     const log = await this.findOneAndUpdate(
-      { messageId },
+      { messageId: { $eq: messageId } },
       updateData,
       { new: true }
     );

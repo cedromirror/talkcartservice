@@ -38,10 +38,10 @@ if (config.cloudinary.enabled) {
       folder: 'talkcart',
       resource_type: 'auto', // Automatically detect resource type
       public_id: (req, file) => {
-        // Generate unique public_id without additional folder nesting
         const timestamp = Date.now();
         const randomString = Math.random().toString(36).substring(2, 15);
-        return `${file.fieldname}_${timestamp}_${randomString}`;
+        const ext = path.extname(file.originalname);
+        return `${file.fieldname}_${timestamp}_${randomString}${ext}`;
       },
     },
   });
@@ -53,7 +53,9 @@ if (config.cloudinary.enabled) {
     },
     filename: (req, file, cb) => {
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      const filename = `file_${uniqueSuffix}_${Math.random().toString(36).substring(2, 15)}${path.extname(file.originalname)}`;
+      // Always append the original extension if present
+      const ext = path.extname(file.originalname);
+      const filename = `file_${uniqueSuffix}_${Math.random().toString(36).substring(2, 15)}${ext}`;
       cb(null, filename);
     }
   });
@@ -71,8 +73,16 @@ const upload = multer({
     files: 1, // Maximum number of files
   },
   fileFilter: (req, file, cb) => {
-    // Allow all file types for now
-    cb(null, true);
+    // Allow common video and image file types
+    const allowedTypes = [
+      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+      'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 'video/x-matroska', 'video/x-msvideo', 'video/x-flv', 'video/3gpp', 'video/3gpp2', 'video/mpeg', 'video/avi', 'video/mov', 'video/x-ms-wmv'
+    ];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type ${file.mimetype} is not allowed. Only common image and video formats are supported.`), false);
+    }
   },
 });
 
@@ -115,10 +125,23 @@ const uploadSingle = (fieldName) => {
       // If using local storage, fix the file URL
       if (!config.cloudinary.enabled && req.file) {
         // Generate proper local URL
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
-        req.file.secure_url = `${baseUrl}/uploads/talkcart/${req.file.filename}`;
-        req.file.url = `${baseUrl}/uploads/talkcart/${req.file.filename}`;
-        req.file.public_id = `talkcart/${req.file.filename}`;
+        const protocol = req.protocol || 'http';
+        const host = req.get('host') || 'localhost:8000';
+        // Use HTTPS in production, HTTP in development
+        const baseUrl = config.server.isProduction ? `https://${host}` : `${protocol}://${host}`;
+        
+        // Ensure we don't have duplicate talkcart paths
+        const filename = req.file.filename;
+        let filePath = `/uploads/talkcart/${filename}`;
+        
+        // Fix duplicate talkcart path issue
+        if (filePath.includes('/uploads/talkcart/talkcart/')) {
+          filePath = filePath.replace('/uploads/talkcart/talkcart/', '/uploads/talkcart/');
+        }
+        
+        req.file.secure_url = `${baseUrl}${filePath}`;
+        req.file.url = `${baseUrl}${filePath}`;
+        req.file.public_id = `talkcart/${filename}`;
       }
       
       next();
@@ -140,11 +163,24 @@ const uploadMultiple = (fieldName, maxCount = 10) => {
       
       // If using local storage, fix the file URLs
       if (!config.cloudinary.enabled && req.files) {
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        // Use HTTPS in production, HTTP in development
+        const protocol = config.server.isProduction ? 'https' : (req.protocol || 'http');
+        const host = req.get('host') || 'localhost:8000';
+        const baseUrl = `${protocol}://${host}`;
+        
         req.files.forEach(file => {
-          file.secure_url = `${baseUrl}/uploads/talkcart/${file.filename}`;
-          file.url = `${baseUrl}/uploads/talkcart/${file.filename}`;
-          file.public_id = `talkcart/${file.filename}`;
+          // Ensure we don't have duplicate talkcart paths
+          const filename = file.filename;
+          let filePath = `/uploads/talkcart/${filename}`;
+          
+          // Fix duplicate talkcart path issue
+          if (filePath.includes('/uploads/talkcart/talkcart/')) {
+            filePath = filePath.replace('/uploads/talkcart/talkcart/', '/uploads/talkcart/');
+          }
+          
+          file.secure_url = `${baseUrl}${filePath}`;
+          file.url = `${baseUrl}${filePath}`;
+          file.public_id = `talkcart/${filename}`;
         });
       }
       
@@ -167,13 +203,25 @@ const uploadFields = (fields) => {
       
       // If using local storage, fix the file URLs
       if (!config.cloudinary.enabled) {
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        // Use HTTPS in production, HTTP in development
+        const protocol = config.server.isProduction ? 'https' : (req.protocol || 'http');
+        const host = req.get('host') || 'localhost:8000';
+        const baseUrl = `${protocol}://${host}`;
         
         // Handle single files
         if (req.file) {
-          req.file.secure_url = `${baseUrl}/uploads/talkcart/${req.file.filename}`;
-          req.file.url = `${baseUrl}/uploads/talkcart/${req.file.filename}`;
-          req.file.public_id = `talkcart/${req.file.filename}`;
+          // Ensure we don't have duplicate talkcart paths
+          const filename = req.file.filename;
+          let filePath = `/uploads/talkcart/${filename}`;
+          
+          // Fix duplicate talkcart path issue
+          if (filePath.includes('/uploads/talkcart/talkcart/')) {
+            filePath = filePath.replace('/uploads/talkcart/talkcart/', '/uploads/talkcart/');
+          }
+          
+          req.file.secure_url = `${baseUrl}${filePath}`;
+          req.file.url = `${baseUrl}${filePath}`;
+          req.file.public_id = `talkcart/${filename}`;
         }
         
         // Handle multiple files
@@ -182,9 +230,18 @@ const uploadFields = (fields) => {
             const files = req.files[fieldname];
             if (Array.isArray(files)) {
               files.forEach(file => {
-                file.secure_url = `${baseUrl}/uploads/talkcart/${file.filename}`;
-                file.url = `${baseUrl}/uploads/talkcart/${file.filename}`;
-                file.public_id = `talkcart/${file.filename}`;
+                // Ensure we don't have duplicate talkcart paths
+                const filename = file.filename;
+                let filePath = `/uploads/talkcart/${filename}`;
+                
+                // Fix duplicate talkcart path issue
+                if (filePath.includes('/uploads/talkcart/talkcart/')) {
+                  filePath = filePath.replace('/uploads/talkcart/talkcart/', '/uploads/talkcart/');
+                }
+                
+                file.secure_url = `${baseUrl}${filePath}`;
+                file.url = `${baseUrl}${filePath}`;
+                file.public_id = `talkcart/${filename}`;
               });
             }
           });
@@ -210,10 +267,23 @@ const uploadProfilePicture = (fieldName) => {
 
       // If using local storage, fix the file URL
       if (!config.cloudinary.enabled && req.file) {
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
-        req.file.secure_url = `${baseUrl}/uploads/talkcart/${req.file.filename}`;
-        req.file.url = `${baseUrl}/uploads/talkcart/${req.file.filename}`;
-        req.file.public_id = `talkcart/${req.file.filename}`;
+        // Use HTTPS in production, HTTP in development
+        const protocol = config.server.isProduction ? 'https' : (req.protocol || 'http');
+        const host = req.get('host') || 'localhost:8000';
+        const baseUrl = `${protocol}://${host}`;
+        
+        // Ensure we don't have duplicate talkcart paths
+        const filename = req.file.filename;
+        let filePath = `/uploads/talkcart/${filename}`;
+        
+        // Fix duplicate talkcart path issue
+        if (filePath.includes('/uploads/talkcart/talkcart/')) {
+          filePath = filePath.replace('/uploads/talkcart/talkcart/', '/uploads/talkcart/');
+        }
+        
+        req.file.secure_url = `${baseUrl}${filePath}`;
+        req.file.url = `${baseUrl}${filePath}`;
+        req.file.public_id = `talkcart/${filename}`;
       }
 
       next();
@@ -285,7 +355,7 @@ const getVideoThumbnail = (publicId, options = {}) => {
   return cloudinary.url(publicId, {
     resource_type: 'video',
     transformation: [
-      { width, height, crop: 'fill' },
+      { width, height, crop: 'fill' }, // Fixed: Added missing comma
       { quality },
       { format: 'jpg' }
     ],

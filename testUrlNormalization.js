@@ -1,79 +1,115 @@
-// Test script for URL normalization function
+/**
+ * Test script to verify URL normalization functions
+ * This script tests the URL normalization logic without imports
+ */
 
-// Import our functions from the PostListItem component
-const normalizeMediaUrl = (urlString) => {
+// Enhanced URL validation utility
+function isValidUrl(urlString) {
+  try {
+    if (!urlString) return false;
+    
+    // Handle Cloudinary URLs with special characters
+    if (urlString.includes('cloudinary.com')) {
+      return urlString.startsWith('http://') || urlString.startsWith('https://');
+    }
+    
+    // Handle local development URLs
+    if (urlString.includes('localhost:') || urlString.includes('127.0.0.1')) {
+      return urlString.startsWith('http://') || urlString.startsWith('https://');
+    }
+    
+    const url = new URL(urlString);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch (e) {
+    return false;
+  }
+}
+
+// Enhanced URL normalization utility
+function normalizeMediaUrl(urlString) {
   try {
     if (!urlString) return null;
     
     // Handle already valid absolute URLs
     if (urlString.startsWith('http://') || urlString.startsWith('https://')) {
+      let normalizedUrl = urlString;
+      
       // Fix duplicate talkcart path issue
-      if (urlString.includes('/uploads/talkcart/talkcart/')) {
-        console.log('🔧 Fixing duplicate talkcart path in URL:', urlString);
-        const fixedUrl = urlString.replace('/uploads/talkcart/talkcart/', '/uploads/talkcart/');
-        console.log('✅ Fixed URL:', fixedUrl);
-        return fixedUrl;
+      if (normalizedUrl.includes('/uploads/talkcart/talkcart/')) {
+        console.log('🔧 Fixing duplicate talkcart path in URL:', normalizedUrl);
+        normalizedUrl = normalizedUrl.replace(/\/uploads\/talkcart\/talkcart\//g, '/uploads/talkcart/');
+        console.log('✅ Fixed URL:', normalizedUrl);
       }
-      return urlString;
+      
+      return normalizedUrl;
     }
     
     // Handle relative URLs by converting to absolute
     if (urlString.startsWith('/')) {
+      let normalizedUrl = urlString;
+      
       // Check for malformed URLs with duplicate path segments
-      if (urlString.includes('/uploads/talkcart/talkcart/')) {
-        console.log('🔧 Fixing duplicate talkcart path in relative URL:', urlString);
-        urlString = urlString.replace('/uploads/talkcart/talkcart/', '/uploads/talkcart/');
-        console.log('✅ Fixed relative URL:', urlString);
+      if (normalizedUrl.includes('/uploads/talkcart/talkcart/')) {
+        console.log('🔧 Fixing duplicate talkcart path in relative URL:', normalizedUrl);
+        normalizedUrl = normalizedUrl.replace(/\/uploads\/talkcart\/talkcart\//g, '/uploads/talkcart/');
+        console.log('✅ Fixed relative URL:', normalizedUrl);
       }
       
       // For development, use localhost:8000 as the base
-      // For production, this should be handled by the backend
-      const isDev = process.env.NODE_ENV === 'development';
-      const baseUrl = isDev ? 'http://localhost:8000' : '';
+      const isDev = true; // Simulate development environment
+      const baseUrl = isDev ? 'http://localhost:8000' : 'https://talkcart.app';
       
       if (baseUrl) {
-        return `${baseUrl}${urlString}`;
+        return `${baseUrl}${normalizedUrl}`;
       }
-      return urlString;
+      return normalizedUrl;
     }
     
     return null;
   } catch (e) {
     console.error('❌ Error in normalizeMediaUrl:', e);
-    // Try one more time with basic validation for edge cases
-    if (urlString && (urlString.startsWith('http://') || urlString.startsWith('https://'))) {
-      return urlString;
-    }
     return null;
   }
-};
+}
 
 // Test cases
 const testCases = [
-  // The exact error case from the console
-  'http://localhost:8000/uploads/talkcart/file_1760459532573_hmjwxi463j',
-  
-  // Case with duplicate path
-  'http://localhost:8000/uploads/talkcart/talkcart/file_1760459532573_hmjwxi463j',
-  
-  // Relative URL with duplicate path
-  '/uploads/talkcart/talkcart/file_1760459532573_hmjwxi463j',
-  
-  // Normal relative URL
-  '/uploads/talkcart/file_normal.mp4',
-  
-  // Cloudinary URL
+  // Normal URLs (should remain unchanged)
+  'http://localhost:8000/uploads/talkcart/file_12345.mp4',
   'https://res.cloudinary.com/demo/video/upload/v1234567890/sample.mp4',
   
-  // Invalid URL
+  // URLs with duplicate paths (should be fixed)
+  'http://localhost:8000/uploads/talkcart/talkcart/file_12345.mp4',
+  'https://res.cloudinary.com/demo/video/upload/talkcart/talkcart/v1234567890/sample.mp4',
+  
+  // Relative URLs (should be converted to absolute)
+  '/uploads/talkcart/file_12345.mp4',
+  '/uploads/talkcart/talkcart/file_12345.mp4',
+  
+  // Invalid URLs
+  null,
+  undefined,
+  '',
   'invalid-url'
 ];
 
-console.log('=== URL Normalization Test ===\n');
+console.log('Testing Video URL Normalization...\n');
 
 testCases.forEach((testCase, index) => {
-  console.log(`Test Case ${index + 1}: ${testCase}`);
-  const result = normalizeMediaUrl(testCase);
-  console.log(`Result: ${result}`);
-  console.log('---\n');
+  console.log(`Test Case ${index + 1}:`);
+  console.log(`  Input: ${testCase}`);
+  
+  try {
+    const normalized = normalizeMediaUrl(testCase);
+    const isValid = isValidUrl(normalized);
+    
+    console.log(`  Normalized: ${normalized}`);
+    console.log(`  Valid: ${isValid}`);
+  } catch (error) {
+    console.log(`  Error: ${error.message}`);
+  }
+  
+  console.log('');
 });
+
+console.log('Test completed.');

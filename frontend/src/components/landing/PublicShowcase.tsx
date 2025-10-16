@@ -22,9 +22,11 @@ import {
   Share2,
   ArrowRight,
   Sparkles,
-  Globe
+  Globe,
+  Earth
 } from 'lucide-react';
 import Link from 'next/link';
+import { PublicFeed } from '@/components/feed/PublicFeed';
 
 interface PublicShowcaseProps {
   onSignUpClick?: () => void;
@@ -45,7 +47,7 @@ export const PublicShowcase: React.FC<PublicShowcaseProps> = ({
 
   const features = [
     {
-      icon: <Public size={24} />,
+      icon: <Globe size={24} />,
       title: 'Public Posts',
       description: 'Share your thoughts with the world',
       color: theme.palette.success.main
@@ -191,12 +193,12 @@ export const PublicShowcase: React.FC<PublicShowcaseProps> = ({
         </Box>
 
         {/* Public Feed */}
-        {/* <PublicFeed
+        <PublicFeed
           showHeader={false}
           maxPosts={10}
           contentFilter="all"
           sortBy="recent"
-        /> */}
+        />
 
         {/* Call to Action */}
         <Paper

@@ -526,12 +526,15 @@ router.get('/public/:identifier/summary', async (req, res) => {
   try {
     const { identifier } = req.params;
 
-    // Resolve user by id or username
+
+    // Resolve user by id or username (with validation)
     let userDoc = null;
     if (mongoose.Types.ObjectId.isValid(identifier)) {
       userDoc = await User.findById(identifier).select('username displayName avatar isVerified followerCount postCount');
     }
-    if (!userDoc) {
+    // Only allow valid usernames (alphanumeric, underscore, dash, dot, 3-30 chars)
+    const usernameRegex = /^[a-zA-Z0-9_\-.]{3,30}$/;
+    if (!userDoc && usernameRegex.test(identifier)) {
       userDoc = await User.findOne({ username: identifier }).select('username displayName avatar isVerified followerCount postCount');
     }
 

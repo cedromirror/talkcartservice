@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_URL, TIMEOUTS } from '@/config/index';
 import { api } from '@/lib/api';
+import { useWebSocket } from '@/contexts/WebSocketContext';
 
 export interface UserSuggestion {
   id: string;
@@ -29,11 +30,6 @@ interface UserSuggestionsResponse {
 interface UseUserSuggestionsOptions {
   limit?: number;
   enabled?: boolean;
-}
-
-interface UseUserSuggestionsOptions {
-  limit?: number;
-  enabled?: boolean;
   search?: string;
 }
 
@@ -42,6 +38,7 @@ export const useUserSuggestions = (options: UseUserSuggestionsOptions = {}) => {
   const [suggestions, setSuggestions] = useState<UserSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { socket, isConnected } = useWebSocket();
 
   const fetchSuggestions = async () => {
     if (!enabled) return;
@@ -103,8 +100,11 @@ export const useUserSuggestions = (options: UseUserSuggestionsOptions = {}) => {
     try {
       // Use shared API client with auto-refresh and normalized errors
       const res = await api.users.follow(userId);
-      if (!res?.success) {
-        throw new Error(res?.message || res?.error || 'Failed to follow user');
+      // Fix TypeScript error by properly typing the response
+      const response = res as { success?: boolean; message?: string; error?: string } | undefined;
+      
+      if (!response?.success) {
+        throw new Error(response?.message || response?.error || 'Failed to follow user');
       }
 
       // Remove the followed user from suggestions
@@ -131,6 +131,30 @@ export const useUserSuggestions = (options: UseUserSuggestionsOptions = {}) => {
   const refreshSuggestions = () => {
     fetchSuggestions();
   };
+
+  // Listen for real-time updates to refresh suggestions when follow relationships change
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handleFollowersUpdate = (data: any) => {
+      // When a user's follower count changes, refresh suggestions
+      // This ensures the "who to follow" list stays current
+      refreshSuggestions();
+    };
+
+    const handleFollowingUpdate = (data: any) => {
+      // When a user's following count changes, refresh suggestions
+      refreshSuggestions();
+    };
+
+    socket.on('user:followers-update', handleFollowersUpdate);
+    socket.on('user:following-update', handleFollowingUpdate);
+
+    return () => {
+      socket.off('user:followers-update', handleFollowersUpdate);
+      socket.off('user:following-update', handleFollowingUpdate);
+    };
+  }, [socket, isConnected]);
 
   useEffect(() => {
     fetchSuggestions();

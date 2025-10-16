@@ -1,0 +1,11 @@
+{
+    "editor.defaultFormatter": "vscode.json-language-features",
+    "snyk.securityAtInception": {
+        "autoConfigureMcpServer": true,
+        "publishSecurityAtInceptionRules": true,
+        "persistRulesInProjects": true
+    },
+    "snyk.issueViewOptions": {
+        "ignoredIssues": true
+    }
+}

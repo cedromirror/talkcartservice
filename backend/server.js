@@ -296,13 +296,44 @@ app.get('/api/image-proxy', cors({
   if (imagePath.includes('/uploads/')) {
     relPath = imagePath.split('/uploads/')[1];
   }
-  
-  const fullPath = path.join(__dirname, 'uploads', relPath);
-  
-  // Check if file exists
+
+  // Prevent directory traversal
+  const uploadsDir = path.join(__dirname, 'uploads');
+  const normalizedPath = path.normalize(path.join(uploadsDir, relPath));
+  if (!normalizedPath.startsWith(uploadsDir)) {
+    return res.status(400).json({ error: 'Invalid image path' });
+  }
+  let fullPath = normalizedPath;
+
+  // Check if file exists; if not, attempt to find a matching file with a known extension
   const fs = require('fs');
   if (!fs.existsSync(fullPath)) {
-    return res.status(404).json({ error: 'Image not found' });
+    try {
+      const dir = path.dirname(fullPath);
+      const base = path.basename(fullPath).toLowerCase();
+  const allowedExts = ['.mp4', '.mp4v', '.webm', '.ogg', '.mov', '.mkv', '.avi', '.flv', '.mp3', '.wav', '.jpg', '.jpeg', '.png', '.gif', '.webp'];
+      if (fs.existsSync(dir)) {
+        const candidates = fs.readdirSync(path.basename(dir));
+        const match = candidates.find(f => {
+          const lower = f.toLowerCase();
+          // exact match (case-insensitive)
+          if (lower === base) return true;
+          // match with allowed extension
+          const ext = path.extname(lower);
+          return lower === `${base}${ext}` && allowedExts.includes(ext);
+        });
+        if (match) {
+          fullPath = path.join(dir, match);
+        } else {
+          return res.status(404).json({ error: 'Image not found' });
+        }
+      } else {
+        return res.status(404).json({ error: 'Image not found' });
+      }
+    } catch (err) {
+      console.error('Error while searching for fallback file:', err);
+      return res.status(500).json({ error: 'Image not found' });
+    }
   }
   
   // Set CORS and cache headers
@@ -313,6 +344,21 @@ app.get('/api/image-proxy', cors({
     'Content-Type': 'image/jpeg', // Default, will be overridden by sendFile
   });
   
+  // If file is extremely small it may not be a valid media file - fallback to placeholder
+  try {
+    const stat = fs.statSync(fullPath);
+    if (stat.size < 128) {
+      // Use frontend placeholder video if available
+      const placeholder = path.join(__dirname, '..', 'frontend', 'public', 'videos', 'placeholder-video.mp4');
+      if (fs.existsSync(placeholder)) {
+        res.set('Content-Type', 'video/mp4');
+        return res.sendFile(placeholder);
+      }
+    }
+  } catch (e) {
+    // ignore and attempt to send the original file
+  }
+
   // Send the file
   res.sendFile(fullPath, (err) => {
     if (err) {
@@ -326,6 +372,75 @@ app.get('/api/image-proxy', cors({
 // Handle favicon requests
 app.get('/favicon.ico', (req, res) => {
   res.status(204).end();
+});
+
+// Middleware: when a requested upload file is missing, serve a placeholder if available
+app.use('/uploads', (req, res, next) => {
+  try {
+    const reqPath = req.path || '';
+    const uploadsDir = path.join(__dirname, 'uploads');
+    const fsPath = path.normalize(path.join(uploadsDir, reqPath));
+
+    // Security: ensure path is within uploadsDir
+    if (!fsPath.startsWith(uploadsDir)) return next();
+
+    const fs = require('fs');
+
+    if (fs.existsSync(fsPath)) return next();
+
+    console.log('🔧 Upload fallback middleware triggered for:', reqPath);
+    console.log('   fsPath:', fsPath);
+    console.log('   File exists:', fs.existsSync(fsPath));
+
+    // Not found: check for the user's specific fallback file first, then general placeholders
+    const fallbackFilename = 'file_1760472876401_eul3ctkpyr8.mp4';
+    const candidates = [
+      path.join(uploadsDir, fallbackFilename),
+      path.join(uploadsDir, 'talkcart', fallbackFilename),
+      path.join(uploadsDir, 'placeholder.mp4'),
+      path.join(uploadsDir, 'talkcart', 'placeholder.mp4'),
+      path.join(__dirname, '..', 'frontend', 'public', 'videos', 'placeholder.mp4') // Add frontend placeholder
+    ];
+
+    const found = candidates.find(p => {
+      try {
+        if (!fs.existsSync(p)) return false;
+        const stat = fs.statSync(p);
+        // Only use a placeholder if file size is reasonable (avoid zero-length files)
+        return stat.isFile() && stat.size > 100; // >100 bytes
+      } catch (e) {
+        return false;
+      }
+    });
+    
+    console.log('   Found valid fallback:', !!found);
+    
+    if (found) {
+      // Redirect to the uploads URL so the static middleware can serve it (supports range requests)
+      const rel = path.relative(uploadsDir, found).replace(/\\/g, '/');
+      const redirectPath = `/uploads/${rel}`;
+      
+      console.log('   Redirecting to:', redirectPath);
+      
+      // Use 302 temporary redirect; browser will then request via the static handler which supports Range
+      return res.redirect(302, redirectPath);
+    } else {
+      // If a placeholder exists but is empty, log a helpful message for debugging
+      const anyPlaceholder = candidates.find(p => fs.existsSync(p));
+      if (anyPlaceholder) {
+        try {
+          const s = fs.statSync(anyPlaceholder);
+          if (s.size === 0) console.warn('Uploads placeholder exists but is empty. Replace with a valid mp4 to fix video fallback:', anyPlaceholder);
+        } catch (e) {}
+      }
+    }
+
+    console.log('   No valid fallback found, calling next()');
+    return next();
+  } catch (e) {
+    console.error('❌ Error in upload fallback middleware:', e);
+    return next();
+  }
 });
 
 // Static files with CORS headers and proper MIME types

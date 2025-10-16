@@ -34,9 +34,9 @@ import { formatDistanceToNow, format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import VoiceMessageBubble from './VoiceMessageBubble';
 import { useMediaMute } from '@/hooks/useMediaMute'; // Import the new hook
-import { convertToProxyUrl } from '@/utils/urlConverter';
-import { proxyCloudinaryUrl } from '@/utils/cloudinaryProxy';
-import OptimizedImage from '@/components/media/OptimizedImage';
+import UnifiedVideoMedia from '@/components/media/UnifiedVideoMedia';
+import UnifiedImageMedia from '@/components/media/UnifiedImageMedia';
+import { isKnownMissingFile } from '@/utils/mediaUtils';
 
 // Placeholder VoiceMessageBubble component if not exists
 const VoiceMessageBubblePlaceholder: React.FC<any> = (props) => (
@@ -174,9 +174,10 @@ const EnhancedMessageBubbleV2: React.FC<EnhancedMessageBubbleV2Props> = ({
         setAudioStates(prev => ({
             ...prev,
             [mediaUrl]: {
-                ...prev[mediaUrl],
+                playing: prev[mediaUrl]?.playing ?? false,
                 currentTime: audio.currentTime,
-                duration: audio.duration || 0
+                duration: audio.duration || 0,
+                muted: prev[mediaUrl]?.muted ?? false
             }
         }));
     };
@@ -188,8 +189,10 @@ const EnhancedMessageBubbleV2: React.FC<EnhancedMessageBubbleV2Props> = ({
         setAudioStates(prev => ({
             ...prev,
             [mediaUrl]: {
-                ...prev[mediaUrl],
-                duration: audio.duration
+                playing: prev[mediaUrl]?.playing ?? false,
+                currentTime: prev[mediaUrl]?.currentTime ?? 0,
+                duration: audio.duration,
+                muted: prev[mediaUrl]?.muted ?? false
             }
         }));
     };
@@ -198,9 +201,10 @@ const EnhancedMessageBubbleV2: React.FC<EnhancedMessageBubbleV2Props> = ({
         setAudioStates(prev => ({
             ...prev,
             [mediaUrl]: {
-                ...prev[mediaUrl],
                 playing: false,
-                currentTime: 0
+                currentTime: 0,
+                duration: prev[mediaUrl]?.duration ?? 0,
+                muted: prev[mediaUrl]?.muted ?? false
             }
         }));
     };
@@ -216,7 +220,9 @@ const EnhancedMessageBubbleV2: React.FC<EnhancedMessageBubbleV2Props> = ({
         setAudioStates(prev => ({
             ...prev,
             [mediaUrl]: {
-                ...prev[mediaUrl],
+                playing: prev[mediaUrl]?.playing ?? false,
+                currentTime: prev[mediaUrl]?.currentTime ?? 0,
+                duration: prev[mediaUrl]?.duration ?? 0,
                 muted: newMutedState
             }
         }));
@@ -233,18 +239,13 @@ const EnhancedMessageBubbleV2: React.FC<EnhancedMessageBubbleV2Props> = ({
                 {message.media.map((media, index) => {
                     const mediaKey = `${message.id}-${index}`;
                     const audioState = audioStates[media.url] || { playing: false, currentTime: 0, duration: 0, muted: false };
-                    const proxiedMediaUrl = proxyCloudinaryUrl(convertToProxyUrl(media.url));
+                    const mediaUrl = media.url;
 
                     // Handle known missing files
-                    const isKnownMissingFile = media.url && typeof media.url === 'string' && (
-                      media.url.includes('file_1760168733155_lfhjq4ik7ht') ||
-                      media.url.includes('file_1760163879851_tt3fdqqim9') ||
-                      media.url.includes('file_1760263843073_w13593s5t8l') ||
-                      media.url.includes('file_1760276276250_3pqeekj048s')
-                    );
+                    const isMissingFile = media.url && typeof media.url === 'string' && isKnownMissingFile(media.url);
 
                     // Handle post detail URLs or known missing files
-                    if ((media.url && media.url.includes('/post/')) || isKnownMissingFile) {
+                    if ((media.url && media.url.includes('/post/')) || isMissingFile) {
                         console.warn('Post detail URL or known missing file detected in message, hiding element:', media.url);
                         return null; // Don't render anything for known missing files
                     }
@@ -253,11 +254,9 @@ const EnhancedMessageBubbleV2: React.FC<EnhancedMessageBubbleV2Props> = ({
                         case 'image':
                             return (
                                 <Box key={index} sx={{ mb: 1, cursor: 'pointer', position: 'relative' }}>
-                                    <OptimizedImage
-                                        src={proxiedMediaUrl}
+                                    <UnifiedImageMedia
+                                        src={isMissingFile ? '/images/placeholder-image-new.png' : mediaUrl}
                                         alt={media.filename}
-                                        width={800}
-                                        height={600}
                                         style={{
                                             maxWidth: '100%',
                                             height: 'auto',
@@ -265,11 +264,6 @@ const EnhancedMessageBubbleV2: React.FC<EnhancedMessageBubbleV2Props> = ({
                                             objectFit: 'cover',
                                             display: 'block'
                                         }}
-                                        onClick={() => {
-                                            setSelectedImage(proxiedMediaUrl);
-                                            setShowImageDialog(true);
-                                        }}
-                                        quality={80}
                                     />
                                     <Typography variant="caption" sx={{ display: 'block', mt: 0.5, opacity: 0.7 }}>
                                         {media.filename}
@@ -280,32 +274,16 @@ const EnhancedMessageBubbleV2: React.FC<EnhancedMessageBubbleV2Props> = ({
                         case 'video':
                             return (
                                 <Box key={index} sx={{ mb: 1, position: 'relative', borderRadius: '12px', overflow: 'hidden' }}>
-                                    <video
-                                        controls
+                                    <UnifiedVideoMedia
+                                        src={isMissingFile ? '/images/placeholder-video-new.png' : mediaUrl}
+                                        alt={media.filename}
                                         style={{
                                             maxWidth: '100%',
                                             maxHeight: 300,
                                             display: 'block',
                                             width: '100%',
                                         }}
-                                        onError={(e) => {
-                                            // Handle video loading error by showing error message
-                                            const target = e.target as HTMLVideoElement;
-                                            const parent = target.parentElement;
-                                            if (parent) {
-                                                parent.innerHTML = `
-                                                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 200px; background: #000; color: white; text-align: center; padding: 20px;">
-                                                        <div style="font-size: 48px; margin-bottom: 16px;">🎥</div>
-                                                        <div style="font-size: 16px; margin-bottom: 8px;">Video not available</div>
-                                                        <div style="font-size: 14px; opacity: 0.8;">The video file could not be found</div>
-                                                    </div>
-                                                `;
-                                            }
-                                        }}
-                                    >
-                                        <source src={proxiedMediaUrl} />
-                                        Your browser does not support the video tag.
-                                    </video>
+                                    />
                                     <Typography variant="caption" sx={{ display: 'block', mt: 0.5, opacity: 0.7 }}>
                                         {media.filename}
                                     </Typography>
@@ -317,11 +295,11 @@ const EnhancedMessageBubbleV2: React.FC<EnhancedMessageBubbleV2Props> = ({
                             return (
                                 <Box key={index} sx={{ mb: 1 }}>
                                     <VoiceMessageBubble
-                                        audioUrl={proxiedMediaUrl}
+                                        audioUrl={isMissingFile ? '' : mediaUrl}
                                         filename={media.filename}
                                         isOwn={message.isOwn}
                                         timestamp={getMessageTime()}
-                                        onDownload={() => window.open(proxiedMediaUrl, '_blank')}
+                                        onDownload={() => !isMissingFile && window.open(mediaUrl, '_blank')}
                                         onForward={onForward}
                                         onReply={onReply}
                                         onDelete={message.isOwn ? () => handleDelete() : undefined}
@@ -344,7 +322,7 @@ const EnhancedMessageBubbleV2: React.FC<EnhancedMessageBubbleV2Props> = ({
                                                 bgcolor: alpha(theme.palette.background.paper, 0.7),
                                             }
                                         }}
-                                        onClick={() => window.open(proxiedMediaUrl, '_blank')}
+                                        onClick={() => !isMissingFile && window.open(mediaUrl, '_blank')}
                                     >
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                             <Typography variant="body2" sx={{ flex: 1 }}>
@@ -368,6 +346,9 @@ const EnhancedMessageBubbleV2: React.FC<EnhancedMessageBubbleV2Props> = ({
     // If this is a voice message (audio type), render it differently
     if (message.type === 'audio' && message.media && message.media.length > 0) {
         const audioMedia = message.media[0];
+        // Additional check to satisfy TypeScript
+        if (!audioMedia) return null;
+        
         return (
             <Box
                 sx={{
@@ -411,16 +392,18 @@ const EnhancedMessageBubbleV2: React.FC<EnhancedMessageBubbleV2Props> = ({
                         </Typography>
                     )}
 
+                    {audioMedia && (
                     <VoiceMessageBubble
-                        audioUrl={audioMedia.url}
-                        filename={audioMedia.filename}
+                        audioUrl={audioMedia.url || ''}
+                        filename={audioMedia.filename || 'Audio message'}
                         isOwn={message.isOwn}
                         timestamp={getMessageTime()}
-                        onDownload={() => window.open(audioMedia.url, '_blank')}
+                        onDownload={() => audioMedia.url ? window.open(audioMedia.url, '_blank') : undefined}
                         onForward={onForward}
                         onReply={onReply}
                         onDelete={message.isOwn ? () => handleDelete() : undefined}
                     />
+                    )}
 
                     {/* Reactions */}
                     {message.reactions && message.reactions.length > 0 && (

@@ -453,8 +453,8 @@ userSchema.methods.getAvatarData = function() {
 userSchema.statics.findByUsernameOrEmail = function(identifier) {
   return this.findOne({
     $or: [
-      { username: new RegExp(`^${identifier}$`, 'i') },
-      { email: identifier.toLowerCase() }
+      { username: { $eq: identifier } },
+      { email: { $eq: identifier.toLowerCase() } }
     ]
   });
 };
@@ -462,14 +462,14 @@ userSchema.statics.findByUsernameOrEmail = function(identifier) {
 // Static method to find by wallet address
 userSchema.statics.findByWallet = function(walletAddress) {
   return this.findOne({ 
-    walletAddress: new RegExp(`^${walletAddress}$`, 'i') 
+    walletAddress: { $eq: walletAddress }
   });
 };
 
 // Static method to find by biometric credential ID
 userSchema.statics.findByCredentialId = function(credentialId) {
   return this.findOne({ 
-    'biometricCredentials.credentialId': credentialId 
+    'biometricCredentials.credentialId': { $eq: credentialId }
   });
 };
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -25,6 +25,7 @@ import {
 import { useUserSuggestions, UserSuggestion } from '@/hooks/useUserSuggestions';
 import { useRouter } from 'next/router';
 import UserAvatar from '@/components/common/UserAvatar';
+import { useWebSocket } from '@/contexts/WebSocketContext';
 
 interface WhoToFollowProps {
   limit?: number;
@@ -42,6 +43,7 @@ const WhoToFollow: React.FC<WhoToFollowProps> = ({
   const theme = useTheme();
   const router = useRouter();
   const { suggestions, loading, error, followUser, refreshSuggestions } = useUserSuggestions({ limit, search: query });
+  const { socket, isConnected } = useWebSocket();
 
   // Apply simple client-side filtering by displayName/username when query provided
   const normalizedQuery = (query || '').trim().toLowerCase();
@@ -51,6 +53,24 @@ const WhoToFollow: React.FC<WhoToFollowProps> = ({
       (s.username || '').toLowerCase().includes(normalizedQuery)
     )
     : suggestions;
+
+  // Listen for real-time follow events to update the UI immediately
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handleNewFollower = (data: any) => {
+      // Refresh suggestions when a new follow event occurs
+      refreshSuggestions();
+    };
+
+    socket.on('user:followers-update', handleNewFollower);
+    socket.on('user:following-update', handleNewFollower);
+
+    return () => {
+      socket.off('user:followers-update', handleNewFollower);
+      socket.off('user:following-update', handleNewFollower);
+    };
+  }, [socket, isConnected, refreshSuggestions]);
 
   const handleFollowUser = async (user: UserSuggestion) => {
     const result = await followUser(user.id);

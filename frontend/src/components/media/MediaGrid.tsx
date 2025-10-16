@@ -25,9 +25,8 @@ import {
 } from '@mui/icons-material';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { convertToProxyUrl } from '@/utils/urlConverter';
-import { proxyCloudinaryUrl } from '@/utils/cloudinaryProxy';
-import OptimizedImage from '@/components/media/OptimizedImage';
+import UnifiedVideoMedia from '@/components/media/UnifiedVideoMedia';
+import UnifiedImageMedia from '@/components/media/UnifiedImageMedia';
 
 interface MediaItem {
     _id: string;
@@ -99,7 +98,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({
         
         if (isKnownMissingFile) {
           console.warn('Known missing file detected in MediaGrid, cannot open:', mediaItem.url);
-          toast.error('This media file is not available');
+          // Silently handle missing files without showing error to user
           return;
         }
         
@@ -236,13 +235,10 @@ const MediaGrid: React.FC<MediaGridProps> = ({
                             onClick={() => handleMediaClick(mediaItem)}
                         >
                             <Box sx={{ position: 'absolute', inset: 0 }}>
-                                <OptimizedImage
+                                <UnifiedImageMedia
                                   src={mediaItem.thumbnail || mediaItem.url}
                                   alt="Media"
-                                  fill
-                                  sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
-                                  style={{ objectFit: 'cover' }}
-                                  quality={80}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                 />
                             </Box>
 
@@ -383,60 +379,25 @@ const MediaGrid: React.FC<MediaGridProps> = ({
 
                             {/* Media content */}
                             {selectedMedia.type === 'video' ? (
-                                <video
-                                    // Check if this is a known missing file pattern
-                                    src={
-                                      selectedMedia.url && typeof selectedMedia.url === 'string' && (
-                                        selectedMedia.url.includes('file_1760168733155_lfhjq4ik7ht') ||
-                                        selectedMedia.url.includes('file_1760163879851_tt3fdqqim9') ||
-                                        selectedMedia.url.includes('file_1760263843073_w13593s5t8l') ||
-                                        selectedMedia.url.includes('file_1760276276250_3pqeekj048s')
-                                      ) 
-                                        ? '/images/placeholder-video-new.png' 
-                                        : convertToProxyUrl(proxyCloudinaryUrl(selectedMedia.url))
-                                    }
-                                    controls
-                                    autoPlay
+                                <UnifiedVideoMedia
+                                    src={selectedMedia.url}
                                     style={{
                                         width: '100%',
                                         height: '100%',
                                         maxHeight: '90vh',
                                         objectFit: 'contain',
                                     }}
-                                    onError={(e) => {
-                                      // Handle video loading error by showing error message
-                                      const target = e.target as HTMLVideoElement;
-                                      const parent = target.parentElement;
-                                      if (parent) {
-                                        parent.innerHTML = `
-                                          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: #000; color: white; text-align: center; padding: 20px;">
-                                            <div style="font-size: 48px; margin-bottom: 16px;">🎥</div>
-                                            <div style="font-size: 16px; margin-bottom: 8px;">Video not available</div>
-                                            <div style="font-size: 14px; opacity: 0.8;">The video file could not be found</div>
-                                          </div>
-                                        `;
-                                      }
-                                    }}
                                 />
                             ) : (
-                                <OptimizedImage
-                                    // Check if this is a known missing file pattern
-                                    src={
-                                      selectedMedia.url && typeof selectedMedia.url === 'string' && (
-                                        selectedMedia.url.includes('file_1760168733155_lfhjq4ik7ht') ||
-                                        selectedMedia.url.includes('file_1760163879851_tt3fdqqim9') ||
-                                        selectedMedia.url.includes('file_1760263843073_w13593s5t8l') ||
-                                        selectedMedia.url.includes('file_1760276276250_3pqeekj048s')
-                                      ) 
-                                        ? '/images/placeholder-image-new.png' 
-                                        : convertToProxyUrl(proxyCloudinaryUrl(selectedMedia.url))
-                                    }
+                                <UnifiedImageMedia
+                                    src={selectedMedia.url}
                                     alt="Media"
-                                    fill
-                                    sizes="100vw"
-                                    style={{ objectFit: 'contain' }}
-                                    quality={80}
-                                  />
+                                    style={{ 
+                                        width: '100%', 
+                                        height: '100%', 
+                                        objectFit: 'contain' 
+                                    }}
+                                />
                             )}
 
                         </>

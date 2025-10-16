@@ -3,279 +3,11 @@ import { Box, Card, CardContent, Typography, IconButton, Button } from '@mui/mat
 import { Heart, MessageSquare, Share, Bookmark, Video, Image as ImageIcon } from 'lucide-react';
 import UserAvatar from '@/components/common/UserAvatar';
 import { formatDistanceToNow, parseISO } from 'date-fns';
+import UnifiedVideoMedia from '@/components/media/UnifiedVideoMedia';
+import UnifiedImageMedia from '@/components/media/UnifiedImageMedia';
+import { normalizeMediaUrl, isKnownMissingFile } from '@/utils/mediaUtils';
 
-// Helper function to validate URLs with enhanced Cloudinary support
-const isValidUrl = (urlString: string): boolean => {
-  try {
-    if (!urlString) return false;
-    
-    // Handle Cloudinary URLs with special characters
-    if (urlString.includes('cloudinary.com')) {
-      // Cloudinary URLs are generally valid even with special characters
-      return urlString.startsWith('http://') || urlString.startsWith('https://');
-    }
-    
-    const url = new URL(urlString);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch (e) {
-    return false;
-  }
-};
 
-// Helper function to validate and normalize URLs with better Cloudinary handling
-const normalizeMediaUrl = (urlString: string): string | null => {
-  try {
-    if (!urlString) return null;
-    
-    // Handle already valid absolute URLs
-    if (urlString.startsWith('http://') || urlString.startsWith('https://')) {
-      // Fix duplicate talkcart path issue
-      if (urlString.includes('/uploads/talkcart/talkcart/')) {
-        console.log('🔧 Fixing duplicate talkcart path in URL:', urlString);
-        const fixedUrl = urlString.replace('/uploads/talkcart/talkcart/', '/uploads/talkcart/');
-        console.log('✅ Fixed URL:', fixedUrl);
-        return fixedUrl;
-      }
-      return urlString;
-    }
-    
-    // Handle relative URLs by converting to absolute
-    if (urlString.startsWith('/')) {
-      // Check for malformed URLs with duplicate path segments
-      if (urlString.includes('/uploads/talkcart/talkcart/')) {
-        console.log('🔧 Fixing duplicate talkcart path in relative URL:', urlString);
-        urlString = urlString.replace('/uploads/talkcart/talkcart/', '/uploads/talkcart/');
-        console.log('✅ Fixed relative URL:', urlString);
-      }
-      
-      // For development, use localhost:8000 as the base
-      // For production, this should be handled by the backend
-      const isDev = process.env.NODE_ENV === 'development';
-      const baseUrl = isDev ? 'http://localhost:8000' : '';
-      
-      if (baseUrl) {
-        return `${baseUrl}${urlString}`;
-      }
-      return urlString;
-    }
-    
-    return null;
-  } catch (e) {
-    console.error('❌ Error in normalizeMediaUrl:', e);
-    // Try one more time with basic validation for edge cases
-    if (urlString && (urlString.startsWith('http://') || urlString.startsWith('https://'))) {
-      return urlString;
-    }
-    return null;
-  }
-};
-
-// Separate component for video rendering with enhanced error handling
-const VideoMedia: React.FC<{ 
-  src: string; 
-  poster?: string; 
-  alt?: string;
-  maxHeight?: string | number;
-}> = ({ src, poster, alt = 'Video', maxHeight = '500px' }) => {
-  const [error, setError] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  
-  // Normalize the source URL
-  const normalizedSrc = normalizeMediaUrl(src) || src;
-
-  // Validate URL format
-  useEffect(() => {
-    if (normalizedSrc && !isValidUrl(normalizedSrc)) {
-      console.warn('❌ Invalid video URL detected:', {
-        originalSrc: src,
-        normalizedSrc,
-        isValid: isValidUrl(normalizedSrc)
-      });
-      setError(true);
-    } else if (normalizedSrc) {
-      console.log('✅ Valid video URL detected:', normalizedSrc);
-    }
-  }, [normalizedSrc, src]);
-
-  if (error || !normalizedSrc) {
-    // Log more information for debugging
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('VideoMedia component falling back to error UI', {
-        src,
-        normalizedSrc,
-        error,
-        validationDetails: {
-          hasSrc: !!src,
-          hasNormalizedSrc: !!normalizedSrc,
-          isUrlValid: normalizedSrc ? isValidUrl(normalizedSrc) : false
-        }
-      });
-    }
-    
-    return (
-      <Box 
-        sx={{ 
-          width: '100%', 
-          height: 200, 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          bgcolor: 'rgba(0, 0, 0, 0.05)',
-          borderRadius: 1
-        }}
-      >
-        <Box sx={{ textAlign: 'center', color: 'text.secondary' }}>
-          <Video size={32} />
-          <Typography variant="body2" sx={{ mt: 1 }}>
-            Video not available (DEBUG: Our fix should prevent this!)
-          </Typography>
-          {process.env.NODE_ENV === 'development' && (
-            <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>
-              Check console for details
-            </Typography>
-          )}
-        </Box>
-      </Box>
-    );
-  }
-
-  return (
-    <Box sx={{ position: 'relative', width: '100%', backgroundColor: 'black' }}>
-      <video
-        src={normalizedSrc}
-        controls
-        style={{ width: '100%', display: 'block', maxHeight }}
-        poster={poster}
-        onError={(e) => {
-          // Enhanced error logging in development mode
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('❌ Video loading failed:', {
-              normalizedSrc,
-              errorEvent: e,
-              videoElement: e.target,
-              // Try to get more details about why the video failed to load
-              networkState: (e.target as HTMLVideoElement).networkState,
-              readyState: (e.target as HTMLVideoElement).readyState,
-              error: (e.target as HTMLVideoElement).error
-            });
-            
-            // Additional debugging information
-            console.log('🔍 Debugging video URL:', {
-              url: normalizedSrc,
-              urlType: typeof normalizedSrc,
-              urlLength: normalizedSrc?.length,
-              startsWithHttp: normalizedSrc?.startsWith('http'),
-              containsUploads: normalizedSrc?.includes('/uploads/'),
-              containsTalkcart: normalizedSrc?.includes('talkcart')
-            });
-          }
-          setError(true);
-        }}
-        onLoadedData={() => {
-          setLoaded(true);
-          if (process.env.NODE_ENV === 'development') {
-            console.log('✅ Video loaded successfully:', normalizedSrc);
-          }
-        }}
-      />
-    </Box>
-  );
-};
-
-// Separate component for image rendering with enhanced error handling
-const ImageMedia: React.FC<{ 
-  src: string; 
-  alt?: string;
-  maxHeight?: string | number;
-}> = ({ src, alt = 'Image', maxHeight = '500px' }) => {
-  const [error, setError] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  
-  // Normalize the source URL
-  const normalizedSrc = normalizeMediaUrl(src) || src;
-
-  // Validate URL format
-  useEffect(() => {
-    if (normalizedSrc && !isValidUrl(normalizedSrc)) {
-      console.warn('❌ Invalid image URL detected:', {
-        originalSrc: src,
-        normalizedSrc,
-        isValid: isValidUrl(normalizedSrc)
-      });
-      setError(true);
-    } else if (normalizedSrc) {
-      console.log('✅ Valid image URL detected:', normalizedSrc);
-    }
-  }, [normalizedSrc, src]);
-
-  if (error || !normalizedSrc) {
-    return (
-      <Box 
-        sx={{ 
-          width: '100%', 
-          height: 200, 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          bgcolor: 'rgba(0, 0, 0, 0.05)',
-          borderRadius: 1
-        }}
-      >
-        <Box sx={{ textAlign: 'center', color: 'text.secondary' }}>
-          <ImageIcon size={32} />
-          <Typography variant="body2" sx={{ mt: 1 }}>
-            Image not available (DEBUG: Our fix should prevent this!)
-          </Typography>
-          {process.env.NODE_ENV === 'development' && (
-            <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>
-              Check console for details
-            </Typography>
-          )}
-        </Box>
-      </Box>
-    );
-  }
-
-  return (
-    <Box sx={{ width: '100%' }}>
-      <img
-        src={normalizedSrc}
-        alt={alt}
-        loading="lazy"
-        style={{ width: '100%', display: 'block', maxHeight, objectFit: 'cover' }}
-        onError={(e) => {
-          // Enhanced error logging in development mode
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('❌ Image loading failed:', {
-              normalizedSrc,
-              errorEvent: e,
-              imageElement: e.target,
-              // Try to get more details about why the image failed to load
-              error: (e.target as HTMLImageElement).alt
-            });
-            
-            // Additional debugging information
-            console.log('🔍 Debugging image URL:', {
-              url: normalizedSrc,
-              urlType: typeof normalizedSrc,
-              urlLength: normalizedSrc?.length,
-              startsWithHttp: normalizedSrc?.startsWith('http'),
-              containsUploads: normalizedSrc?.includes('/uploads/'),
-              containsTalkcart: normalizedSrc?.includes('talkcart')
-            });
-          }
-          setError(true);
-        }}
-        onLoad={() => {
-          setLoaded(true);
-          if (process.env.NODE_ENV === 'development') {
-            console.log('✅ Image loaded successfully:', normalizedSrc);
-          }
-        }}
-      />
-    </Box>
-  );
-};
 
 // Separate component for grid media with enhanced error handling
 const GridMedia: React.FC<{ 
@@ -284,139 +16,47 @@ const GridMedia: React.FC<{
 }> = ({ mediaItem, content }) => {
   // Normalize the media URL with better error handling
   const mediaUrl = mediaItem.secure_url || mediaItem.url;
-  const normalizedMediaUrl = (mediaUrl && normalizeMediaUrl(mediaUrl)) || mediaUrl;
   
-  // Validate URL before rendering
-  const isValidMedia = normalizedMediaUrl && (normalizedMediaUrl.startsWith('http://') || normalizedMediaUrl.startsWith('https://'));
+  // Check if this is a known missing file
+  const isMissingFile = mediaUrl && typeof mediaUrl === 'string' && isKnownMissingFile(mediaUrl);
   
-  if (!isValidMedia) {
-    // Show placeholder for invalid media
-    return (
-      <Box 
-        sx={{ 
-          width: '100%', 
-          height: '150px', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          bgcolor: 'rgba(0, 0, 0, 0.05)',
-          borderRadius: 1
-        }}
-      >
-        <Box sx={{ textAlign: 'center', color: 'text.secondary' }}>
-          {mediaItem.resource_type === 'video' ? <Video size={24} /> : <ImageIcon size={24} />}
-          <Typography variant="body2" sx={{ mt: 1, fontSize: '0.75rem' }}>
-            Media not available
-          </Typography>
-          {process.env.NODE_ENV === 'development' && (
-            <Typography variant="caption" sx={{ mt: 0.5, display: 'block', fontSize: '0.65rem' }}>
-              Invalid URL (DEBUG: Our fix should prevent this!)
-            </Typography>
-          )}
-        </Box>
-      </Box>
-    );
+  if (isMissingFile) {
+    // For missing files, use placeholder directly
+    if (mediaItem.resource_type === 'video') {
+      return (
+        <UnifiedVideoMedia 
+          src="/images/placeholder-video-new.png" 
+          alt={content || 'Video content'} 
+          maxHeight="150px"
+        />
+      );
+    } else {
+      return (
+        <UnifiedImageMedia 
+          src="/images/placeholder-image-new.png" 
+          alt={content || 'Image content'} 
+          maxHeight="150px"
+        />
+      );
+    }
   }
   
+  // For valid media URLs, use the unified components
   if (mediaItem.resource_type === 'video') {
     return (
-      <Box sx={{ position: 'relative', width: '100%', backgroundColor: 'black' }}>
-        <video 
-          src={normalizedMediaUrl || ''} 
-          controls 
-          style={{ width: '100%', display: 'block', height: '150px' }} 
-          poster={mediaItem.thumbnail || mediaItem.thumbnail_url}
-          onError={(e) => {
-            // Enhanced error logging in development mode
-            if (process.env.NODE_ENV === 'development') {
-              console.warn('❌ Grid video loading failed:', {
-                normalizedMediaUrl,
-                mediaItem,
-                errorEvent: e,
-                videoElement: e.target,
-                networkState: (e.target as HTMLVideoElement).networkState,
-                readyState: (e.target as HTMLVideoElement).readyState,
-                error: (e.target as HTMLVideoElement).error
-              });
-              
-              // Additional debugging information
-              console.log('🔍 Debugging grid video URL:', {
-                url: normalizedMediaUrl,
-                mediaItemDetails: {
-                  id: mediaItem.id,
-                  public_id: mediaItem.public_id,
-                  resource_type: mediaItem.resource_type,
-                  format: mediaItem.format
-                }
-              });
-            }
-            // Replace with fallback UI
-            const target = e.target as HTMLVideoElement;
-            const parent = target.parentElement;
-            if (parent) {
-              parent.innerHTML = `
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: rgba(0,0,0,0.05); color: #666; text-align: center; padding: 10px;">
-                  <div style="font-size: 24px; margin-bottom: 8px;">🎥</div>
-                  <div style="font-size: 12px;">Video not available</div>
-                  ${process.env.NODE_ENV === 'development' ? `<div style="font-size: 10px; margin-top: 4px;">Check console</div>` : ''}
-                </div>
-              `;
-            }
-          }}
-          onLoadedData={(e) => {
-            if (process.env.NODE_ENV === 'development') {
-              console.log('✅ Grid video loaded successfully:', normalizedMediaUrl);
-            }
-          }}
-        />
-      </Box>
+      <UnifiedVideoMedia 
+        src={mediaUrl} 
+        poster={mediaItem.thumbnail || mediaItem.thumbnail_url}
+        alt={content || 'Video content'} 
+        maxHeight="150px"
+      />
     );
   } else {
     return (
-      <img 
-        src={normalizedMediaUrl || ''} 
-        alt={content || 'post image'} 
-        loading="lazy" 
-        style={{ width: '100%', display: 'block', height: '150px', objectFit: 'cover' }} 
-        onError={(e) => {
-          // Enhanced error logging in development mode
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('❌ Grid image loading failed:', {
-              normalizedMediaUrl,
-              mediaItem,
-              errorEvent: e,
-              imageElement: e.target
-            });
-            
-            // Additional debugging information
-            console.log('🔍 Debugging grid image URL:', {
-              url: normalizedMediaUrl,
-              mediaItemDetails: {
-                id: mediaItem.id,
-                public_id: mediaItem.public_id,
-                resource_type: mediaItem.resource_type,
-                format: mediaItem.format
-              }
-            });
-          }
-          // Replace with fallback UI
-          const target = e.target as HTMLImageElement;
-          const parent = target.parentElement;
-          if (parent) {
-            parent.innerHTML = `
-              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: rgba(0,0,0,0.05); color: #666; text-align: center; padding: 10px;">
-                <div style="font-size: 24px; margin-bottom: 8px;">📷</div>
-                <div style="font-size: 12px;">Image not available</div>
-                ${process.env.NODE_ENV === 'development' ? `<div style="font-size: 10px; margin-top: 4px;">Check console</div>` : ''}
-              </div>
-            `;
-          }
-        }}
-        onLoad={(e) => {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('✅ Grid image loaded successfully:', normalizedMediaUrl);
-          }
-        }}
+      <UnifiedImageMedia 
+        src={mediaUrl} 
+        alt={content || 'Image content'} 
+        maxHeight="150px"
       />
     );
   }
@@ -463,9 +103,9 @@ const PostListItem: React.FC<PostListItemProps> = ({ post, onBookmark, onLike, o
     setIsClient(true);
   }, []);
 
-  const isValidMediaUrl = (url?: string) => {
+  const isValidMediaUrl = (url?: string, resourceType?: string) => {
     if (!url) return false;
-    const normalizedUrl = normalizeMediaUrl(url);
+    const normalizedUrl = normalizeMediaUrl(url, resourceType);
     // Additional check for valid URL format
     return normalizedUrl !== null && (normalizedUrl.startsWith('http://') || normalizedUrl.startsWith('https://'));
   };
@@ -482,53 +122,38 @@ const PostListItem: React.FC<PostListItemProps> = ({ post, onBookmark, onLike, o
       });
     }
     
-    return normalizeMediaUrl(url);
+    return normalizeMediaUrl(url, mediaItem.resource_type);
   };
 
   // Function to render media content
   const renderMediaContent = (mediaItem: MediaItem) => {
     const mediaUrl = getValidMediaUrl(mediaItem);
     
+    // Check if this is a known missing file
+    const isMissingFile = mediaUrl && typeof mediaUrl === 'string' && isKnownMissingFile(mediaUrl);
+    
     // Enhanced validation
     const isMediaUrlValid = mediaUrl && (mediaUrl.startsWith('http://') || mediaUrl.startsWith('https://'));
     
-    if (!isMediaUrlValid) {
-      // Log for debugging in development
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('❌ Invalid media URL detected:', {
-          mediaItem,
-          mediaUrl,
-          secure_url: mediaItem.secure_url,
-          url: mediaItem.url
-        });
+    if (!isMediaUrlValid || isMissingFile) {
+      // For missing files or invalid URLs, use placeholders directly
+      if (mediaItem.resource_type === 'video') {
+        return (
+          <UnifiedVideoMedia 
+            src="/images/placeholder-video-new.png" 
+            alt={post.content || 'Video content'} 
+            maxHeight="200px"
+          />
+        );
+      } else {
+        return (
+          <UnifiedImageMedia 
+            src="/images/placeholder-image-new.png" 
+            alt={post.content || 'Image content'} 
+            maxHeight="200px"
+          />
+        );
       }
-      
-      // Render placeholder for missing media
-      return (
-        <Box 
-          sx={{ 
-            width: '100%', 
-            height: 200, 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            bgcolor: 'rgba(0, 0, 0, 0.05)',
-            borderRadius: 1
-          }}
-        >
-          <Box sx={{ textAlign: 'center', color: 'text.secondary' }}>
-            {mediaItem.resource_type === 'video' ? <Video size={32} /> : <ImageIcon size={32} />}
-            <Typography variant="body2" sx={{ mt: 1 }}>
-              Media not available
-            </Typography>
-            {process.env.NODE_ENV === 'development' && (
-              <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>
-                Invalid URL (DEBUG: Our fix should prevent this!)
-              </Typography>
-            )}
-          </Box>
-        </Box>
-      );
     }
 
     if (mediaItem.resource_type === 'video') {
@@ -544,12 +169,12 @@ const PostListItem: React.FC<PostListItemProps> = ({ post, onBookmark, onLike, o
             bgcolor: 'rgba(0, 0, 0, 0.1)',
             borderRadius: 1
           }}>
-            <Video size={32} color="#666" />
+            <Video size={32} />
           </Box>
         );
       }
       
-      return <VideoMedia src={mediaUrl} poster={mediaItem.thumbnail || mediaItem.thumbnail_url} alt={post.content || 'Video'} />;
+      return <UnifiedVideoMedia src={mediaUrl} poster={mediaItem.thumbnail || mediaItem.thumbnail_url} alt={post.content || 'Video content'} maxHeight="200px" />;
     } else {
       // Only render image element on client side to prevent hydration errors
       if (!isClient) {
@@ -568,7 +193,7 @@ const PostListItem: React.FC<PostListItemProps> = ({ post, onBookmark, onLike, o
         );
       }
       
-      return <ImageMedia src={mediaUrl} alt={post.content || 'Image'} />;
+      return <UnifiedImageMedia src={mediaUrl} alt={post.content || 'Image content'} maxHeight="200px" />;
     }
   };
 
@@ -594,7 +219,7 @@ const PostListItem: React.FC<PostListItemProps> = ({ post, onBookmark, onLike, o
         {Array.isArray(post.media) && post.media.length > 0 && (
           <Box sx={{ borderRadius: 1, overflow: 'hidden', bgcolor: 'background.default', border: '1px solid', borderColor: 'divider', mb: 1 }}>
             {(() => {
-              const validMedia = post.media.filter(m => isValidMediaUrl(m.secure_url || m.url));
+              const validMedia = post.media.filter(m => isValidMediaUrl(m.secure_url || m.url, m.resource_type));
               if (validMedia.length === 1) {
                 const mediaItem = validMedia[0];
                 return mediaItem ? renderMediaContent(mediaItem) : null;
@@ -617,7 +242,7 @@ const PostListItem: React.FC<PostListItemProps> = ({ post, onBookmark, onLike, o
                           </Box>
                         ) : (
                           // Additional validation before rendering GridMedia
-                          isValidMediaUrl(m.secure_url || m.url) ? (
+                          isValidMediaUrl(m.secure_url || m.url, m.resource_type) ? (
                             <GridMedia mediaItem={m} content={post.content} />
                           ) : (
                             <Box 
@@ -633,7 +258,7 @@ const PostListItem: React.FC<PostListItemProps> = ({ post, onBookmark, onLike, o
                               <Box sx={{ textAlign: 'center', color: 'text.secondary' }}>
                                 {m.resource_type === 'video' ? <Video size={24} /> : <ImageIcon size={24} />}
                                 <Typography variant="body2" sx={{ mt: 1, fontSize: '0.75rem' }}>
-                                  Media not available
+                                  Media content
                                 </Typography>
                               </Box>
                             </Box>

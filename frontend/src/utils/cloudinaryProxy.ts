@@ -105,6 +105,11 @@ export const proxyCloudinaryUrl = (cloudinaryUrl: string): string => {
     }
   }
   
+  // Convert HTTP to HTTPS for secure connections (except localhost)
+  if (cloudinaryUrl.startsWith('http://') && !cloudinaryUrl.includes('localhost:')) {
+    cloudinaryUrl = cloudinaryUrl.replace('http://', 'https://');
+  }
+  
   // For non-Cloudinary URLs, return as is
   console.log('Non-Cloudinary URL, returning as is:', cloudinaryUrl);
   return cloudinaryUrl;

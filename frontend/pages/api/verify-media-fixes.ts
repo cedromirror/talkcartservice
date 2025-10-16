@@ -29,12 +29,9 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       }
     ],
     testPages: [
-      "/test-media-posts",
-      "/test-video-playback", 
-      "/verify-media-fixes",
-      "/comprehensive-media-test",
-      "/media-visibility-test",
-      "/debug-media-test"
+      "/test-video-fix",
+      "/comprehensive-test",
+      "/final-media-verification"
     ],
     verificationStatus: "All fixes have been applied and tested"
   };

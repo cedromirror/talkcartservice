@@ -4,21 +4,21 @@ import '@testing-library/jest-dom';
 import PostListItem from './PostListItem';
 
 // Mock video component to avoid actual video loading
-jest.mock('./VideoMedia', () => {
+jest.mock('@/components/media/UnifiedVideoMedia', () => {
   return function MockVideoMedia() {
     return <div data-testid="mock-video">Video Player</div>;
   };
 });
 
 // Mock image component to avoid actual image loading
-jest.mock('./ImageMedia', () => {
+jest.mock('@/components/media/UnifiedImageMedia', () => {
   return function MockImageMedia() {
     return <div data-testid="mock-image">Image Display</div>;
   };
 });
 
 // Mock GridMedia component
-jest.mock('./GridMedia', () => {
+jest.mock('@/components/media/UnifiedImageMedia', () => {
   return function MockGridMedia() {
     return <div data-testid="mock-grid-media">Grid Media</div>;
   };
@@ -63,7 +63,7 @@ describe('PostListItem', () => {
 
     render(<PostListItem post={postWithVideo} />);
     
-    // Since we're mocking the VideoMedia component, we check for the mock
+    // Since we're mocking the UnifiedVideoMedia component, we check for the mock
     expect(screen.getByTestId('mock-video')).toBeInTheDocument();
   });
 
@@ -82,7 +82,7 @@ describe('PostListItem', () => {
 
     render(<PostListItem post={postWithImage} />);
     
-    // Since we're mocking the ImageMedia component, we check for the mock
+    // Since we're mocking the UnifiedImageMedia component, we check for the mock
     expect(screen.getByTestId('mock-image')).toBeInTheDocument();
   });
 

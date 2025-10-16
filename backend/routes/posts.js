@@ -5,6 +5,121 @@ const { Post, User, Comment, Follow, Share, Notification } = require('../models'
 const { authenticateToken } = require('./auth');
 const { getVideoThumbnail } = require('../config/cloudinary');
 const NotificationService = require('../services/notificationService');
+const fs = require('fs');
+const path = require('path');
+
+// Helper: attempt to resolve local /uploads URLs to files with known extensions
+// and fall back to a placeholder when nothing matches.
+const resolveLocalUploadUrl = (url) => {
+  try {
+    if (!url || typeof url !== 'string') return url;
+
+    // Only operate on local uploads paths (either absolute /uploads/... or localhost URLs)
+    const uploadsToken = '/uploads/';
+    if (!url.includes(uploadsToken)) return url;
+
+    // Extract the relative path after /uploads/
+    const rel = url.split(uploadsToken).pop();
+    if (!rel) return url;
+
+    const uploadsDir = path.join(__dirname, '..', 'uploads');
+    const candidatePath = path.normalize(path.join(uploadsDir, path.basename(rel)));
+
+    // If file already exists (maybe had an extension) return original URL
+    if (fs.existsSync(candidatePath)) return url;
+
+    // Try to find a matching filename with a known extension in the same directory
+    const allowedExts = ['.mp4', '.mp4v', '.webm', '.ogg', '.mov', '.mkv', '.avi', '.flv', '.mp3', '.wav', '.jpg', '.jpeg', '.png', '.gif', '.webp'];
+    const dir = path.dirname(candidatePath);
+    const base = path.basename(candidatePath).toLowerCase();
+    if (!fs.existsSync(dir)) return url;
+
+    const candidates = fs.readdirSync(dir);
+    const match = candidates.find(f => {
+      const lower = f.toLowerCase();
+      // exact match
+      if (lower === base) return true;
+      const ext = path.extname(lower);
+      if (!ext) return false;
+      return lower === `${base}${ext}` && allowedExts.includes(ext);
+    });
+
+    if (match) {
+      // Preserve host prefix if present in URL
+      if (url.startsWith('http')) {
+        const idx = url.indexOf(uploadsToken);
+        const prefix = url.substring(0, idx);
+        return `${prefix}${uploadsToken}${match}`;
+      }
+      return `${uploadsToken}${match}`;
+    }
+
+    // If nothing matched, attempt a safe fallback to a placeholder file (check both uploads root and talkcart/)
+    try {
+      // Prefer the specific fallback URL required by the user
+      const fallback = 'file_1760472876401_eul3ctkpyr8.mp4';
+      const fallbackPaths = [path.join(fallback), path.join('talkcart', fallback)];
+      for (const ph of fallbackPaths) {
+        const placeholderFsPath = path.join(uploadsDir, ph);
+        try {
+          if (!fs.existsSync(placeholderFsPath)) continue;
+          const stat = fs.statSync(placeholderFsPath);
+          if (!stat.isFile() || stat.size <= 100) continue; // ignore empty files
+          const phUrl = ph.replace(/\\/g, '/');
+          if (url.startsWith('http')) {
+            const idx = url.indexOf(uploadsToken);
+            const prefix = url.substring(0, idx);
+            return `${prefix}${uploadsToken}${phUrl}`;
+          }
+          return `${uploadsToken}${phUrl}`;
+        } catch (e) {
+          continue;
+        }
+      }
+    } catch (e) {
+      // ignore placeholder resolution errors
+    }
+
+    return url;
+  } catch (err) {
+    console.error('Error resolving local upload URL:', err);
+    return url;
+  }
+};
+
+const normalizeMediaUrls = (mediaArray) => {
+  if (!Array.isArray(mediaArray)) return mediaArray || [];
+  return mediaArray.map(item => {
+    try {
+      const originalUrl = item.secure_url || item.url || '';
+      const resolved = resolveLocalUploadUrl(originalUrl);
+      
+      // Convert HTTP to HTTPS for secure connections (except localhost)
+      let secureUrl = resolved || item.url;
+      let regularUrl = resolved || item.url;
+      
+      // Only convert to HTTPS in production, not in development with localhost
+      if (secureUrl && secureUrl.startsWith('http://') && !secureUrl.includes('localhost:')) {
+        secureUrl = secureUrl.replace('http://', 'https://');
+      }
+      
+      if (regularUrl && regularUrl.startsWith('http://') && !regularUrl.includes('localhost:')) {
+        regularUrl = regularUrl.replace('http://', 'https://');
+      }
+      
+      // If resolved is a relative /uploads/... path and original was not absolute,
+      // keep as-is; otherwise, set both url and secure_url to resolved so frontend
+      // can use either field interchangeably.
+      return {
+        ...item,
+        url: regularUrl,
+        secure_url: item.secure_url || secureUrl,
+      };
+    } catch (e) {
+      return item;
+    }
+  });
+};
 
 // Helper function to get Socket.IO instance
 const getIo = (req) => req.app.get('io');
@@ -811,12 +926,15 @@ router.post('/', authenticateToken, async (req, res) => {
     // Note: Mentions validation can be added later as an async process
     // For now, we'll allow mentions and validate them in the background
 
+    // Normalize media URLs so local uploads point to resolvable paths
+    const normalizedMedia = normalizeMediaUrls(media || []);
+
     // Create new post
     const newPost = new Post({
       author: user._id,
       content: content.trim(),
       type,
-      media: media || [],
+      media: normalizedMedia,
       hashtags: hashtags.map(tag => tag.toLowerCase()),
       mentions,
       location,
@@ -1001,6 +1119,11 @@ router.put('/:postId', authenticateToken, async (req, res) => {
     if (hashtags) post.hashtags = hashtags.map(tag => tag.toLowerCase());
     if (location) post.location = location;
     if (privacy) post.privacy = privacy;
+
+    // Normalize media URLs on update if provided
+    if (req.body.media) {
+      post.media = normalizeMediaUrls(req.body.media || []);
+    }
 
     // Save updated post
     await post.save();

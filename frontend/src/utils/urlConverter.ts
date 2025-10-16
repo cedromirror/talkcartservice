@@ -60,6 +60,11 @@ export const convertToProxyUrl = (url: string): string => {
     }
   }
   
+  // Convert HTTP to HTTPS for secure connections (except localhost)
+  if (url.startsWith('http://') && !url.includes('localhost:')) {
+    url = url.replace('http://', 'https://');
+  }
+  
   // For other URLs, return as is
   console.log('URL not converted, returning as is:', url);
   return url;

@@ -1,136 +1,142 @@
-import React from 'react';
-import { Volume2, VolumeX } from 'lucide-react';
+/**
+ * Video Utilities
+ * 
+ * This utility provides functions for handling video URLs and validation
+ */
 
 /**
- * Validate video file before upload
+ * Validate if a string is a valid URL
+ * @param urlString The URL string to validate
+ * @returns boolean indicating if the URL is valid
  */
-export const validateVideoFile = (file: File): { valid: boolean; error?: string; details?: string } => {
-  // Check if file exists
-  if (!file) {
-    return { valid: false, error: 'No file selected' };
-  }
-
-  // Check file size (200MB limit)
-  const maxSize = 200 * 1024 * 1024; // 200MB in bytes
-  if (file.size > maxSize) {
-    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
-    return { 
-      valid: false, 
-      error: 'File too large', 
-      details: `Selected file is ${fileSizeMB}MB. Maximum allowed size is 200MB.` 
-    };
-  }
-
-  // Check file type
-  const allowedTypes = [
-    'video/mp4',
-    'video/webm',
-    'video/ogg',
-    'video/quicktime', // MOV
-    'video/x-msvideo', // AVI
-    'video/x-matroska' // MKV
-  ];
-
-  if (!allowedTypes.includes(file.type)) {
-    // Also check file extension as fallback
-    const extension = file.name.split('.').pop()?.toLowerCase();
-    const allowedExtensions = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'];
+export const isValidUrl = (urlString: string): boolean => {
+  try {
+    if (!urlString) return false;
     
-    if (!extension || !allowedExtensions.includes(extension)) {
-      return { 
-        valid: false, 
-        error: 'Unsupported file type', 
-        details: `File type ${file.type || 'unknown'} is not supported. Supported formats: MP4, WebM, OGG, MOV, AVI, MKV.` 
-      };
+    // Handle Cloudinary URLs with special characters
+    if (urlString.includes('cloudinary.com')) {
+      // Cloudinary URLs are generally valid even with special characters
+      return urlString.startsWith('http://') || urlString.startsWith('https://');
     }
-  }
-
-  // Additional validation for video files
-  if (file.type.startsWith('video/')) {
-    // Check if filename seems valid
-    if (!file.name || file.name.length < 5) {
-      return { 
-        valid: false, 
-        error: 'Invalid filename', 
-        details: 'The selected file has an invalid name.' 
-      };
+    
+    // Handle local development URLs
+    if (urlString.includes('localhost:') || urlString.includes('127.0.0.1')) {
+      return urlString.startsWith('http://') || urlString.startsWith('https://');
     }
+    
+    const url = new URL(urlString);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch (e) {
+    return false;
   }
-
-  return { valid: true };
 };
 
 /**
- * Get volume icon based on muted state
+ * Normalize media URL with comprehensive fixes
+ * @param urlString The URL to normalize
+ * @param resourceType The type of resource (video, image, etc.)
+ * @returns Normalized URL string or null
  */
-export const getVolumeIcon = (
-  muted: boolean, 
-  volume?: number, 
-  size: number = 20
-): React.ReactElement => {
-  if (muted || volume === 0) {
-    return React.createElement(VolumeX, { size });
+export const normalizeMediaUrl = (urlString: string, resourceType?: string): string | null => {
+  try {
+    if (!urlString) return null;
+    
+    // Handle already valid absolute URLs
+    if (urlString.startsWith('http://') || urlString.startsWith('https://')) {
+      let normalizedUrl = urlString;
+      
+      // Fix duplicate talkcart path issue
+      if (normalizedUrl.includes('/uploads/talkcart/talkcart/')) {
+        console.log('🔧 Fixing duplicate talkcart path in URL:', normalizedUrl);
+        normalizedUrl = normalizedUrl.replace(/\/uploads\/talkcart\/talkcart\//g, '/uploads/talkcart/');
+        console.log('✅ Fixed URL:', normalizedUrl);
+      }
+      
+      // Fix for missing file extensions in local URLs
+      if (normalizedUrl.includes('localhost:')) {
+        const hasExtension = normalizedUrl.includes('.');
+        const isVideoResource = resourceType === 'video';
+        
+        // For video resources or URLs that look like they should be videos, ensure .mp4 extension
+        if (isVideoResource && !hasExtension) {
+          normalizedUrl += '.mp4';
+        } else if (!hasExtension) {
+          // Check if it's missing an extension and try to add .mp4 for videos
+          const isVideo = normalizedUrl.includes('video') || normalizedUrl.includes('mp4') || normalizedUrl.includes('mov');
+          if (isVideo && !normalizedUrl.endsWith('.mp4')) {
+            normalizedUrl += '.mp4';
+          }
+        }
+      }
+      
+      // Convert HTTP to HTTPS for secure connections (except localhost)
+      if (normalizedUrl.startsWith('http://') && !normalizedUrl.includes('localhost:')) {
+        normalizedUrl = normalizedUrl.replace('http://', 'https://');
+      }
+      
+      return normalizedUrl;
+    }
+    
+    // Handle relative URLs by converting to absolute
+    if (urlString.startsWith('/')) {
+      let normalizedUrl = urlString;
+      
+      // Check for malformed URLs with duplicate path segments
+      if (normalizedUrl.includes('/uploads/talkcart/talkcart/')) {
+        console.log('🔧 Fixing duplicate talkcart path in relative URL:', normalizedUrl);
+        normalizedUrl = normalizedUrl.replace(/\/uploads\/talkcart\/talkcart\//g, '/uploads/talkcart/');
+        console.log('✅ Fixed relative URL:', normalizedUrl);
+      }
+      
+      // For development, use localhost:8000 as the base
+      // For production, this should be handled by the backend
+      const isDev = process.env.NODE_ENV === 'development';
+      const baseUrl = isDev ? 'http://localhost:8000' : (typeof window !== 'undefined' ? window.location.origin.replace('http://', 'https://') : 'https://yourdomain.com');
+      
+      if (baseUrl) {
+        // Ensure we don't double up on slashes
+        if (normalizedUrl.startsWith('/')) {
+          normalizedUrl = `${baseUrl}${normalizedUrl}`;
+        } else {
+          normalizedUrl = `${baseUrl}/${normalizedUrl}`;
+        }
+        
+        // Fix for missing file extensions in local URLs
+        if (normalizedUrl.includes('localhost:')) {
+          const hasExtension = normalizedUrl.includes('.');
+          const isVideoResource = resourceType === 'video';
+          
+          // For video resources or URLs that look like they should be videos, ensure .mp4 extension
+          if (isVideoResource && !hasExtension) {
+            normalizedUrl += '.mp4';
+          } else if (!hasExtension) {
+            // Check if it's missing an extension and try to add .mp4 for videos
+            const isVideo = normalizedUrl.includes('video') || normalizedUrl.includes('mp4') || normalizedUrl.includes('mov');
+            if (isVideo && !normalizedUrl.endsWith('.mp4')) {
+              normalizedUrl += '.mp4';
+            }
+          }
+        }
+        
+        // Convert HTTP to HTTPS for secure connections (except localhost)
+        if (normalizedUrl.startsWith('http://') && !normalizedUrl.includes('localhost:')) {
+          normalizedUrl = normalizedUrl.replace('http://', 'https://');
+        }
+      }
+      return normalizedUrl;
+    }
+    
+    return null;
+  } catch (e) {
+    console.error('❌ Error in normalizeMediaUrl:', e);
+    // Try one more time with basic validation for edge cases
+    if (urlString && (urlString.startsWith('http://') || urlString.startsWith('https://'))) {
+      // Convert HTTP to HTTPS for secure connections (except localhost)
+      if (urlString.startsWith('http://') && !urlString.includes('localhost:')) {
+        return urlString.replace('http://', 'https://');
+      }
+      return urlString;
+    }
+    return null;
   }
-  
-  return React.createElement(Volume2, { size });
-};
-
-/**
- * Get volume tooltip text
- */
-export const getVolumeTooltip = (muted: boolean, volume?: number): string => {
-  if (muted || volume === 0) {
-    return 'Unmute';
-  }
-  
-  return 'Mute';
-};
-
-/**
- * Format video duration
- */
-export const formatDuration = (seconds: number): string => {
-  if (!seconds || seconds < 0) return '0:00';
-  
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const remainingSeconds = Math.floor(seconds % 60);
-  
-  if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-  }
-  
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-};
-
-/**
- * Get video quality label
- */
-export const getQualityLabel = (width?: number, height?: number): string => {
-  if (!width || !height) return 'Unknown';
-  
-  if (height >= 2160) return '4K';
-  if (height >= 1440) return '2K';
-  if (height >= 1080) return 'HD';
-  if (height >= 720) return 'HD';
-  if (height >= 480) return 'SD';
-  
-  return 'Low';
-};
-
-/**
- * Calculate video aspect ratio
- */
-export const getAspectRatio = (width?: number, height?: number): number => {
-  if (!width || !height) return 16 / 9; // Default aspect ratio
-  
-  return width / height;
-};
-
-/**
- * Check if video format is supported
- */
-export const isVideoFormatSupported = (format: string): boolean => {
-  const supportedFormats = ['mp4', 'webm', 'ogg', 'mov', 'avi'];
-  return supportedFormats.includes(format.toLowerCase());
 };

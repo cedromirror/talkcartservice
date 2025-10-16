@@ -106,6 +106,7 @@ router.post('/upload', authenticateToken, (req, res) => {
       // Additional validation for video files
       if (resource_type === 'video') {
         // Ensure we have a proper URL for videos
+        // Properly distinguish by checking if the URL contains cloudinary.com
         if (!secure_url || !secure_url.includes('cloudinary.com')) {
           // If using local storage, ensure proper URL format
           if (!config.cloudinary.enabled) {
@@ -235,7 +236,7 @@ router.post('/upload/single', authenticateToken, (req, res) => {
       
       if (req.file) {
         // Check if this is a Cloudinary response or local storage response
-        if (req.file.public_id && req.file.secure_url) {
+        if (req.file.public_id && req.file.secure_url && req.file.secure_url.includes('cloudinary.com')) {
           // Cloudinary response
           const public_id = req.file.public_id || req.file.filename;
           const secure_url = req.file.secure_url || req.file.path;
@@ -394,7 +395,8 @@ router.post('/upload/profile-picture', authenticateToken, (req, res) => {
       
       if (req.file) {
         // Check if this is a Cloudinary response or local storage response
-        if (req.file.public_id && req.file.secure_url) {
+        // Properly distinguish by checking if the URL contains cloudinary.com
+        if (req.file.public_id && req.file.secure_url && req.file.secure_url.includes('cloudinary.com')) {
           // Cloudinary response
           const public_id = req.file.public_id || req.file.filename;
           const secure_url = req.file.secure_url || req.file.path;

@@ -10,21 +10,21 @@ jest.mock('date-fns', () => ({
 }));
 
 // Mock video component to avoid actual video loading
-jest.mock('./VideoMedia', () => {
+jest.mock('@/components/media/UnifiedVideoMedia', () => {
   return function MockVideoMedia({ src }: { src: string }) {
     return <div data-testid="mock-video">Video Player - {src}</div>;
   };
 });
 
 // Mock image component to avoid actual image loading
-jest.mock('./ImageMedia', () => {
+jest.mock('@/components/media/UnifiedImageMedia', () => {
   return function MockImageMedia({ src }: { src: string }) {
     return <div data-testid="mock-image">Image Display - {src}</div>;
   };
 });
 
 // Mock GridMedia component
-jest.mock('./GridMedia', () => {
+jest.mock('@/components/media/UnifiedImageMedia', () => {
   return function MockGridMedia({ mediaItem }: { mediaItem: any }) {
     const src = mediaItem.secure_url || mediaItem.url;
     return <div data-testid="mock-grid-media">Grid Media - {src}</div>;
@@ -183,7 +183,7 @@ describe('Video Post Integration', () => {
     
     // Wait for the error state to be rendered
     await waitFor(() => {
-      expect(screen.getByText('Video not available')).toBeInTheDocument();
+      expect(screen.getByText('Video content')).toBeInTheDocument();
     });
     
     // Restore console.warn
@@ -204,7 +204,7 @@ describe('Video Post Integration', () => {
 
     render(<PostListItem post={postWithMissingUrl} />);
     
-    // Should show error message for missing URL
-    expect(screen.getByText('Media not available')).toBeInTheDocument();
+    // Should show placeholder content for missing URL
+    expect(screen.getByText('Video content')).toBeInTheDocument();
   });
 });

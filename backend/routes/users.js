@@ -421,6 +421,22 @@ router.delete('/:id/follow', authenticateTokenStrict, async (req, res) => {
     await User.findByIdAndUpdate(targetUserId, { $inc: { followerCount: -1 } });
     await User.findByIdAndUpdate(currentUserId, { $inc: { followingCount: -1 } });
 
+    // Emit real-time update via Socket.IO
+    const io = req.app.get('io');
+    if (io) {
+      // Update follower count for the unfollowed user
+      io.to(`user_${targetUserId}`).emit('user:followers-update', {
+        userId: targetUserId,
+        followerCount: (await User.findById(targetUserId)).followerCount
+      });
+
+      // Update following count for the unfollower
+      io.to(`user_${currentUserId}`).emit('user:following-update', {
+        userId: currentUserId,
+        followingCount: (await User.findById(currentUserId)).followingCount
+      });
+    }
+
     console.log(`User ${currentUserId} successfully unfollowed user ${targetUserId}`);
 
     res.json({

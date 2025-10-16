@@ -179,4 +179,4 @@ export const mockPublicPosts: MockPost[] = [
     shareCount: 62,
     hashtags: ['#Running', '#Marathon', '#Fitness'],
   },
-];
+]; 
